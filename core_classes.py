@@ -21,7 +21,7 @@ def plot_thresh_cut(xy_data, xy_labels, cut_array, thresh, num):
                          x_data.max(),
                          100)
     
-    thresh_line = thresh * np.ones(x_line.shape)
+    
     
     fig = plt.figure(num)
     ax = fig.subplots()
@@ -35,9 +35,11 @@ def plot_thresh_cut(xy_data, xy_labels, cut_array, thresh, num):
               label='trig passing cut',
               ls='none', marker='+', color='slateblue')
 
-    ax.plot(x_line, thresh_line,
-            label='Threshold {}={}'.format(ylabel, thresh),
-            color='k')
+    if thresh is not None:
+        thresh_line = thresh * np.ones(x_line.shape)
+        ax.plot(x_line, thresh_line,
+                label='Threshold {}={}'.format(ylabel, thresh),
+                color='k')
     
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
@@ -70,6 +72,7 @@ class Tree(object):
             if value.ndim > 1 and value.shape[0]==1:
                 value = value[0]
             setattr(self, key, value)
+
 
 class Wisp(object):
     """ Preparing inheritance for Root and Thicket classes.
@@ -224,26 +227,6 @@ class Analysis(object):
         self.all = Guardian(self.roots)
 
         self.all.trig.ref = self.all.trig.filt_decor
-        
-
-#        amp_list = list()
-#        chi2_list = list()
-#        amp_noise_list = list()
-#        chi2_noise_list = list()
-#        for lab in self.part_label:
-#            root = getattr(self, lab)
-#            amp_list.append(root.trig.filt_decor.Energy_OF)
-#            chi2_list.append(root.trig.filt_decor.chi2_OF)
-#            amp_noise_list.append(root.noise.filt_decor.Energy_OF_t0)
-#            chi2_noise_list.append(root.noise.filt_decor.chi2_OF_t0)
-#        
-#        self.amp = np.concatenate(amp_list, axis=0)
-#        self.chi2 = np.concatenate(chi2_list, axis=0)
-#        self.trig_samples = (self.amp).shape[0]
-#
-#        self.amp_noise = np.concatenate(amp_noise_list, axis=0)
-#        self.chi2_noise = np.concatenate(chi2_noise_list, axis=0)
-#        self.noise_samples = (self.amp_noise).shape[0]
 
         self._thresh_chi2_heat = np.inf
         self._cut_chi2_heat_trig = np.ones(self.all.trig.nsamples, dtype=bool)
@@ -265,16 +248,14 @@ class Analysis(object):
     def cut_chi2_heat_noise(self):
         return self._cut_chi2_heat_noise
     
-    def set_cut_chi2_heat(self, thresh):
+    def set_cut_chi2_heat(self, thresh=300):
         
         self._thresh_chi2_heat = thresh
         
         condi_trig = self.all.trig.filt_decor.chi2_OF[:, 0] < self.thresh_chi2_heat
-#        self._cut_chi2_heat_trig = np.nonzero(condi_trig)[0]
         self._cut_chi2_heat_trig = condi_trig
         
         condi_noise = self.all.noise.filt_decor.chi2_OF[:, 0] < self.thresh_chi2_heat
-#        self._cut_chi2_heat_noise = np.nonzero(condi_noise)[0]
         self._cut_chi2_heat_noise = condi_noise
  
     @property
@@ -289,18 +270,50 @@ class Analysis(object):
     def cut_chi2_ion_noise(self):
         return self._cut_chi2_ion_noise
     
-    def set_cut_chi2_ion(self, thresh):
+    def set_cut_chi2_ion(self, thresh=300):
         
         self._thresh_chi2_ion = thresh
         
         condi_trig = self.all.trig.filt_decor.chi2_OF[:, 2:] < self.thresh_chi2_ion
-#        self._cut_chi2_ion_trig = np.nonzero(condi_trig)[0]
-        self._cut_chi2_ion_trig = condi_trig
+        condi_trig_and = condi_trig[:, 0]
+        for i in range(3):
+            condi_trig_and = np.logical_and(condi_trig_and, condi_trig[:, i+1])
+        self._cut_chi2_ion_trig = condi_trig_and
         
         condi_noise = self.all.noise.filt_decor.chi2_OF[:, 2:] < self.thresh_chi2_ion
-#        self._cut_chi2_ion_noise = np.nonzero(condi_noise)[0]
-        self._cut_chi2_ion_noise = condi_noise
-#    
+        condi_noise_and = condi_noise[:, 0]
+        for i in range(3):
+            condi_noise_and = np.logical_and(condi_noise_and, condi_noise[:, i+1])
+        self._cut_chi2_ion_noise = condi_noise_and
+
+    @property
+    def thresh_chi2_ion_off(self):
+        return self._thresh_chi2_ion_off
+    
+    @property
+    def cut_chi2_ion_off_trig(self):
+        return self._cut_chi2_ion_off_trig
+
+    @property
+    def cut_chi2_ion_off_noise(self):
+        return self._cut_chi2_ion_off_noise
+    
+    def set_cut_chi2_ion_off(self, thresh=14000):
+        
+        self._thresh_chi2_ion_off = thresh
+        
+        condi_trig = self.all.trig.raw.Off[:, 2:] < self.thresh_chi2_ion_off
+        condi_trig_and = condi_trig[:, 0]
+        for i in range(3):
+            condi_trig_and = np.logical_and(condi_trig_and, condi_trig[:, i+1])
+        self._cut_chi2_ion_off_trig = condi_trig_and
+        
+        condi_noise = self.all.noise.raw.Off[:, 2:] < self.thresh_chi2_ion_off
+        condi_noise_and = condi_noise[:, 0]
+        for i in range(3):
+            condi_noise_and = np.logical_and(condi_noise_and, condi_noise[:, i+1])
+        self._cut_chi2_ion_off_noise = condi_noise_and
+
 
 if __name__ == '__main__':
     
@@ -338,12 +351,23 @@ if __name__ == '__main__':
     fig, ax = plot_thresh_cut(
             (ana.all.trig.filt_decor.Energy_OF[:, 2], ana.all.trig.filt_decor.chi2_OF[:, 2]),
             ('Amplitude [ADU]', '$\chi_2$'),
-            ana.cut_chi2_ion_trig[:, 0],
+            ana.cut_chi2_ion_trig,
             ana.thresh_chi2_ion,
             'Ion Channel: Chi2(amp)'
     )
     
     
+    # CUT Offset ion
+    ana.set_cut_chi2_ion_off()
+    
+    fig, ax = plot_thresh_cut(
+            (ana.all.trig.filt_decor.Energy_OF[:, 2], ana.all.trig.filt_decor.chi2_OF[:, 2]),
+            ('Amplitude [ADU]', '$\chi_2$'),
+            ana.cut_chi2_ion_off_trig,
+            None,
+            'Offset cut Ion Channel: Chi2(amp)'
+    )
+      
     
 #amp = root.EventTree_noise_Normal_filt_decor.Energy_OF
 #chi2 = root.EventTree_noise_Normal_filt_decor.chi2_OF
