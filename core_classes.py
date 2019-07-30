@@ -11,6 +11,9 @@ import re
 import os
 import matplotlib.pyplot as plt
 import abc
+import matplotlib.patheffects as pe
+
+from lighten_color import lighten_color
 
 def plot_thresh_cut(xy_data, xy_labels, cut_array, thresh, num):
 
@@ -20,8 +23,6 @@ def plot_thresh_cut(xy_data, xy_labels, cut_array, thresh, num):
     x_line = np.linspace(x_data.min(),
                          x_data.max(),
                          100)
-    
-    
     
     fig = plt.figure(num)
     ax = fig.subplots()
@@ -48,6 +49,55 @@ def plot_thresh_cut(xy_data, xy_labels, cut_array, thresh, num):
     ax.grid(True)
     
     return fig, ax
+
+
+def custom_bin_edges(bmin, bmax, res):
+    num = int(abs(bmax-bmin)/res)
+    return np.linspace(bmin, bmax, num)
+
+
+def ax_hist(axis, bin_edges, data_array, lab, color='slateblue'):
+    """ Draw pretty histogramm and cdf in given axis.
+    Return bin_array, hist_array, cdf_array.    
+    """
+    c_dark = lighten_color(color, 1.5)
+    c_light = lighten_color(color, 0.8)
+    
+    style = [pe.Normal(), pe.withStroke(foreground='k', linewidth=3)]
+
+    bin_array = bin_edges[1:] - (bin_edges[1]-bin_edges[0])/2
+
+    data_hist, _ = np.histogram(data_array, bins=bin_edges)
+    
+    data_sorted = np.sort(data_array)
+    ndim = data_sorted.shape[-1]
+    cdf = (np.arange(ndim)+1) / float(ndim)    
+    
+    hist_line, = axis.plot(bin_array, data_hist, ls='steps-mid',
+                           color=c_dark)
+
+    axis.fill_between(bin_array, data_hist, label=lab,
+                      color=color, step='mid')
+
+    a0 = axis.twinx()
+    a0.set_ylabel('CDF', color='grey')
+    a0.tick_params(axis='y', labelcolor='grey')
+    
+    cdf_line, = a0.plot(data_sorted, cdf,
+                        ls='steps', color=c_light, path_effects=style)
+    
+    axis.grid(True)
+    axis.set_ylabel('Counts Events {}'.format(lab), color='k')
+    axis.tick_params(axis='y', labelcolor='k')
+    axis.set_xlabel('Energy [ADU]')
+    
+    axis.legend()
+    
+    axis.set_yscale('log')
+    axis.set_xlim(bin_edges[0], bin_edges[-1])
+    
+    return bin_array, data_hist, cdf
+
 
 class Artifact(object):
     """ Empty class. To define namespace.
@@ -240,50 +290,9 @@ class Analysis(object):
         # definng quality cuts
         self.all.trig.cut = Copse()
         self.all.noise.cut = Copse()
-    
-    
-    def set_cut_chi2_heat(self, thresh=300):
-        
-        self._thresh_chi2_heat = thresh
-        
-        condi_trig = self.all.trig.filt_decor.chi2_OF[:, 0] < self.thresh_chi2_heat
-        self._cut_chi2_heat_trig = condi_trig
-        
-        condi_noise = self.all.noise.filt_decor.chi2_OF[:, 0] < self.thresh_chi2_heat
-        self._cut_chi2_heat_noise = condi_noise
 
 
-    def set_cut_chi2_ion(self, thresh=300):
-        
-        self._thresh_chi2_ion = thresh
-        
-        condi_trig = self.all.trig.filt_decor.chi2_OF[:, 2:] < self.thresh_chi2_ion
-        condi_trig_and = condi_trig[:, 0]
-        for i in range(3):
-            condi_trig_and = np.logical_and(condi_trig_and, condi_trig[:, i+1])
-        self._cut_chi2_ion_trig = condi_trig_and
-        
-        condi_noise = self.all.noise.filt_decor.chi2_OF[:, 2:] < self.thresh_chi2_ion
-        condi_noise_and = condi_noise[:, 0]
-        for i in range(3):
-            condi_noise_and = np.logical_and(condi_noise_and, condi_noise[:, i+1])
-        self._cut_chi2_ion_noise = condi_noise_and
-    
-    def set_cut_chi2_ion_off(self, thresh=14000):
-        
-        condi_trig = self.all.trig.raw.Off[:, 2:] < thresh
-        condi_trig_and = condi_trig[:, 0]
-        for i in range(3):
-            condi_trig_and = np.logical_and(condi_trig_and, condi_trig[:, i+1])
-        self._cut_chi2_ion_off_trig = condi_trig_and
-        
-        condi_noise = self.all.noise.raw.Off[:, 2:] < self.thresh_chi2_ion_off
-        condi_noise_and = condi_noise[:, 0]
-        for i in range(3):
-            condi_noise_and = np.logical_and(condi_noise_and, condi_noise[:, i+1])
-        self._cut_chi2_ion_off_noise = condi_noise_and
-
-
+#%%
 if __name__ == '__main__':
     
     plt.close('all')
@@ -299,12 +308,13 @@ if __name__ == '__main__':
     thresh_chi2_ion = 300
     thresh_offset_ion = 14000
     
-    etypes = (trig, noise)
-    etype_labels = ('trig', 'noise')
+    etypes = (noise, trig)
+    etype_labels = ('noise', 'trig')
     
     for etype, elab in zip(etypes, etype_labels):
     
         energy = etype.filt_decor.Energy_OF
+        
         chi2 = etype.filt_decor.chi2_OF
         offset = etype.raw.Off
     
@@ -323,32 +333,8 @@ if __name__ == '__main__':
                                    etype.cut.offset_ion), axis=0)
         etype.cut.new_cut('quality', quality_truth_array)
         etype.nsamples_quality = np.count_nonzero(etype.cut.quality)
-
-#    fig, ax = plot_thresh_cut(
-#            (energy[:, 0], chi2[:, 0]),
-#            ('Amplitude [ADU]', '$\chi_2$'),
-#            trig.cut.chi2_heat,
-#            thresh_chi2_heat,
-#            'Heat Channel: Chi2(amp)'
-#    )
-#
-#    fig, ax = plot_thresh_cut(
-#            (energy[:, 2], chi2[:, 2]),
-#            ('Amplitude [ADU]', '$\chi_2$'),
-#            trig.cut.chi2_ion,
-#            thresh_chi2_ion,
-#            'Ion Channel: Chi2(amp)'
-#    )
-#    
-#    
-#    fig, ax = plot_thresh_cut(
-#            (energy[:, 2], chi2[:, 2]),
-#            ('Amplitude [ADU]', '$\chi_2$'),
-#            trig.cut.offset_ion,
-#            None,
-#            'Offset cut Ion Channel: Chi2(amp)'
-#    )
-
+        
+        # chi2 vs Energy plot
         ax_titles = ('Heat', 'Ion A', 'Ion B', 'Ion C', 'Ion D')       
         ax_tuples = ((1, 0), (0, 1), (0, 2), (1, 1), (1, 2))       
         data_ind = (0, 2, 3, 4, 5)       
@@ -383,7 +369,32 @@ if __name__ == '__main__':
         fig.delaxes(axes[0,0])    
         fig.tight_layout()
 
+
+        # Histogramm
+        ax_titles = ('Heat', 'Ion A', 'Ion B', 'Ion C', 'Ion D')       
+        ax_tuples = ((0, 1), (1, 0), (1, 1), (2, 0), (2, 1))
+        data_ind = (0, 2, 3, 4, 5)  
+        x_datas = (energy[:, i] for i in data_ind)    
     
+        fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(11.69, 8.27),
+                                 num='{} : Quality Cut Histogram'.format(elab))
+        
+        for tupl, xdata, title in zip(ax_tuples, x_datas, ax_titles):
+            
+            ax = axes[tupl]
+            
+            bin_edges = np.histogram_bin_edges(xdata[etype.cut.quality], bins=250)
+        
+            ax_hist(ax, bin_edges, xdata,
+                    'All events', color='coral')
+            ax_hist(ax, bin_edges, xdata[etype.cut.quality],
+                    'Quality events', color='slateblue')
+            
+            ax.set_title(title)
+    
+        fig.delaxes(axes[0,0])    
+        fig.tight_layout()
+
 #amp = root.EventTree_noise_Normal_filt_decor.Energy_OF
 #chi2 = root.EventTree_noise_Normal_filt_decor.chi2_OF
 
