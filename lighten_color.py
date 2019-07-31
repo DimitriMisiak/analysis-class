@@ -3,7 +3,9 @@
 """
 Created on Mon Jul 29 12:08:42 2019
 
-@author: misiak
+Credits to: 
+Ian Hincks ihincks
+https://gist.github.com/ihincks/6a420b599f43fcd7dbd79d56798c4e5a
 """
 
 def lighten_color(color, amount=0.5):
