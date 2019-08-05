@@ -148,7 +148,7 @@ if __name__ == '__main__':
     plt.rcParams['text.usetex']=True
     style = [pe.Normal(), pe.withStroke(foreground='k', linewidth=3)]
     
-    run = 'tg17l003'
+    run = 'tg25l019'
     ana = Analysis(run)
 
 # =============================================================================
@@ -258,7 +258,7 @@ if __name__ == '__main__':
 # =============================================================================
 # BASELINE RESOLUTION
 # =============================================================================
-    ana.sigma0 = Artifact('sigma0')
+    noise.sigma0 = Artifact('sigma0')
     
     energy = noise.filt_decor.Energy_OF_t0[noise.cut.quality]
     
@@ -266,7 +266,7 @@ if __name__ == '__main__':
     for ind in run_tree.chan_valid:
         chan = run_tree.chan_label[ind]
         sigma = np.std(energy[:, ind])
-        setattr(ana.sigma0, chan, sigma)
+        setattr(noise.sigma0, chan, sigma)
 
 # =============================================================================
 # FIDUCIAL CUT (only on trig)
@@ -278,7 +278,7 @@ if __name__ == '__main__':
     # fiducial condition
     for ind in run_tree.chan_veto:
         lab = run_tree.chan_label[ind]
-        sigma0 = getattr(ana.sigma0, lab)
+        sigma0 = getattr(noise.sigma0, lab)
         
         # consider cut at 2-sigma
         cond = np.abs(energy[:, ind]) < 2*sigma0
@@ -304,8 +304,16 @@ if __name__ == '__main__':
     ana.model = Artifact('model')
     ana.model.popt = Artifact('popt')
     
-    # with fiducial cut
-    energy = trig.filt_decor.Energy_OF[trig.cut.fiducial]
+    # check if the run is heat only, and choose a good cut for the data
+    if np.all(run_tree.Polar_Ion == 0):
+        # heat only run
+        ana.calibration_peak.cut_type = 'quality'
+    else:
+        # heat + ion run
+        ana.calibration_peak.cut_type = 'fiducial'
+    
+    cut_peak = getattr(trig.cut, ana.calibration_peak.cut_type)
+    energy = trig.filt_decor.Energy_OF[cut_peak]
 
     # double gaussian distribution model
     ana.model.dist = double_norm(name='double_gaussian')
@@ -316,7 +324,7 @@ if __name__ == '__main__':
         data = energy[:, ind]
     
         mu01, mu02 = np.quantile(data, [0.10, 0.90])
-        sig01 = sig02 = ana.sigma0.heat_a
+        sig01 = sig02 = noise.sigma0.heat_a
         p0_light = [0.5, mu01, sig01, mu02, sig02]
         p0 = np.append(p0_light, [0, 1])
     
@@ -343,41 +351,69 @@ if __name__ == '__main__':
 # CONVERSION FROM ADU TO EV
 # =============================================================================
     # energy in eV, and energy in eV corrected with the sign
-    ana.energy = Artifact('energy')
-    ana.energy_corr = Artifact('energy_corr')
+    trig.energy_ev = Artifact('energy_ev')
+    noise.energy_ev = Artifact('energy_ev')
+    noise.sigma0_ev = Artifact('sigma0_ev')
+    ana.calibration_peak.sigma_ev = Artifact('sigma_ev')
     
     # recovering energy in adu
     energy_adu = trig.filt_decor.Energy_OF
+    noise_energy_adu = noise.filt_decor.Energy_OF_t0
+    sigma0 = noise.sigma0
+    sigma = ana.calibration_peak.sigma
 
     # creating the sign correction used when "adding ion channels"
-    proto_sign = np.concatenate((run_tree.Sign_Chal, run_tree.Polar_Ion), axis=1)
+    proto_sign = np.concatenate((-run_tree.Sign_Chal, run_tree.Polar_Ion), axis=1)
     assert np.all(proto_sign == proto_sign[0])
     proto_sign = proto_sign[0]
     
-    run_tree.sign_corr = np.where(proto_sign<0, -1, 1)
+    # no correction for negative polarisation collecting positive signal,
+    # -1 correction for the positive polarisation collecting negative signal
+    run_tree.sign_corr = np.where(proto_sign<0, +1, -1)
 
     for ind in run_tree.chan_signal:
         lab = run_tree.chan_label[ind]
         
         e_adu = energy_adu[:, ind]
+        noise_e_adu = noise_energy_adu[:, ind]
+        sig0_adu = getattr(sigma0, lab)
+        sig_adu = getattr(sigma, lab)
+        
         sens = getattr(ana.sensitivity, lab)
-        e_ev = e_adu / sens
-        
-        sign = run_tree.sign_corr[ind]
-        e_ev_corr = e_ev * sign
-        
-        setattr(ana.energy, lab, e_ev)
-        setattr(ana.energy_corr, lab, e_ev_corr)       
+        sign = run_tree.sign_corr[ind]        
 
+        e_ev = e_adu / sens
+        noise_e_ev = noise_e_adu / sens
+        sig0_ev = sign * sig0_adu / sens
+        sig_ev = sign * sig_adu / sens
+
+        setattr(trig.energy_ev, lab, e_ev)
+        setattr(noise.energy_ev, lab, noise_e_ev)
+        setattr(noise.sigma0_ev, lab, sig0_ev)
+        setattr(ana.calibration_peak.sigma_ev, lab, sig_ev)
+
+# =============================================================================
+# VIRTUAL COLLECT CHANNEL
+# =============================================================================
+    # labels of the channel with energy conversion in eV
+    run_tree.chan_label_virtual = ['heat_a', 'collect']
     
     energy_collect = list()
+    noise_collect = list()
     for ind in run_tree.chan_collect:
         lab = run_tree.chan_label[ind]
-        energy = getattr(ana.energy_corr, lab)
+        run_tree.chan_label_virtual.append(lab)
+        
+        energy = getattr(trig.energy_ev, lab)
         energy_collect.append(energy)
+        
+        noise_energy = getattr(noise.energy_ev, lab)
+        noise_collect.append(noise_energy)
     
-    ana.energy_corr.collect = np.sum(energy_collect, axis=1)
-    
+    trig.energy_ev.collect = np.sum(energy_collect, axis=0)
+    noise.energy_ev.collect = np.sum(noise_collect, axis=0)
+
+    noise.sigma0_ev.collect = np.std(noise.energy_ev.collect)
 ## =============================================================================
 ## DEFINITON OF THE VIRTUAL ELECTRODE (SUMMING THE DATA)
 ## =============================================================================
@@ -387,23 +423,11 @@ if __name__ == '__main__':
 #    
 #    # for the virtual all_ion channel
 #    energy_ion_all = np.sum(energy[:, run_tree.chan_ion], axis=0)
-#    ana.sigma0.ion_all = np.std(energy_ion_all)
-#    
-#    # creating the sign correction used when "adding ion channels"
-#    proto_sign = np.concatenate((run_tree.Sign_Chal, run_tree.Polar_Ion), axis=1)
-#    assert np.all(proto_sign == proto_sign[0])
-#    proto_sign = proto_sign[0]
-#    
-#    run_tree.sign_corr = np.where(proto_sign<0, -1, 1)
-#    energy_corr = energy * run_tree.sign_corr
-#    
-#    # for the virtual collect channel
-#    energy_collect = np.sum(energy_corr[:, run_tree.chan_collect], axis=0)
-#    ana.sigma0.collect = np.std(energy_collect)
+#    noise.sigma0.ion_all = np.std(energy_ion_all)
 #    
 #    # for the virtual veto channel
 #    energy_veto = np.sum(energy_corr[:, run_tree.chan_veto], axis=0)
-#    ana.sigma0.veto = np.std(energy_veto)
+#    noise.sigma0.veto = np.std(energy_veto)
 #        
 
 #%%
@@ -630,7 +654,7 @@ if __name__ == '__main__':
 
 #%%
 # =============================================================================
-# HISTOGRAM
+# HISTOGRAM ADU
 # =============================================================================
     for etype in etypes:
 
@@ -661,7 +685,7 @@ if __name__ == '__main__':
             
             if etype is trig:
                 bin_edges = custom_bin_edges(xdata_qual, 
-                                             getattr(ana.sigma0, label))
+                                             getattr(noise.sigma0, label))
         
             ax_hist(ax, bin_edges, xdata,
                     'All events', color='coral')
@@ -677,7 +701,12 @@ if __name__ == '__main__':
                     popt = getattr(ana.model.popt, label)
                     xrange = np.linspace(xdata_fid.min(), xdata_fid.max(), 1000)
                     pdf = ana.model.dist.pdf(xrange, *popt)
-                    pdf_norm = pdf * trig.nsamples_fiducial * (bin_edges[1] - bin_edges[0])
+                    
+                    normalization = getattr(trig,
+                                            'nsamples_{}'.format(
+                                                    ana.calibration_peak.cut_type
+                                            ))
+                    pdf_norm = pdf * normalization * (bin_edges[1] - bin_edges[0])
                     
                     ax.autoscale(False)
                     ax.plot(xrange, pdf_norm,
@@ -696,6 +725,58 @@ if __name__ == '__main__':
                  bbox=dict(facecolor='lime', alpha=0.5))
     
         fig.delaxes(axes[0,0])    
+        fig.tight_layout()
+
+#%%
+# =============================================================================
+# HISTOGRAM EV
+# =============================================================================
+    for etype in etypes:
+
+        energy = etype.energy_ev
+        
+        ax_tuples = ((0, 0), (0, 1), (1, 0), (1, 1))
+        labels = run_tree.chan_label_virtual
+    
+        num = '{} : Quality Cut Histogram EV'.format(etype.name)
+    
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(11.69, 8.27),
+                                 num=num)
+        
+        for tupl, label in zip(ax_tuples, labels):
+            xdata = getattr(energy, label)
+            ax = axes[tupl]
+            xdata_qual = xdata[etype.cut.quality]
+            
+            if etype is noise:
+                bin_edges = np.histogram_bin_edges(xdata[etype.cut.quality])
+            
+            if etype is trig:
+                bin_edges = custom_bin_edges(xdata_qual, 
+                                             getattr(noise.sigma0_ev, label))
+        
+            ax_hist(ax, bin_edges, xdata,
+                    'All events', color='coral')
+            ax_hist(ax, bin_edges, xdata_qual,
+                    'Quality events', color='slateblue')
+            
+            if etype is trig:
+                xdata_fid = xdata[trig.cut.fiducial]
+                ax_hist(ax, bin_edges, xdata_fid,
+                        'Fiducial events', color='limegreen')     
+                
+            ax.set_xlabel('Enregy [eV]')
+            ax.legend(loc=2)
+            ax.set_title(label.replace('_', ' '))
+            
+            if etype is noise:
+                ax.set_yscale('linear')
+        
+        fig.text(0.5, 0.98, num,
+                 horizontalalignment='center',
+                 verticalalignment='center',
+                 bbox=dict(facecolor='lime', alpha=0.5))
+      
         fig.tight_layout()
 
 #%%
@@ -749,18 +830,18 @@ if __name__ == '__main__':
 
         if xind in run_tree.chan_veto:
             lab = run_tree.chan_label[xind]
-            xamp = 2*getattr(ana.sigma0, lab)
+            xamp = 2*getattr(noise.sigma0, lab)
             ymin, ymax = energy_y.min(), energy_y.max()
             ax.fill_betweenx([ymin, ymax], -xamp, +xamp, color='lavender')
 
         if yind in run_tree.chan_veto:
             lab = run_tree.chan_label[yind]
-            yamp = 2*getattr(ana.sigma0, lab)
+            yamp = 2*getattr(noise.sigma0, lab)
             xmin, xmax = energy_x.min(), energy_x.max()
             ax.fill_between([xmin, xmax], -yamp, +yamp, color='lavender',
                              label='Fiducial selection (2$\sigma$)')
             
-        custom_autoscale(ax, energy[cut, xind], energy[cut, yind])
+        custom_autoscale(ax, energy_x[cut_qual], energy_y[cut_qual])
         
         ax.grid(alpha=0.3)
         
@@ -780,6 +861,91 @@ if __name__ == '__main__':
             ax.set_ylabel(
                     'Energy {} [ADU]'.format(
                             run_tree.chan_label[yind].replace('_', ' ')
+                    )
+            )
+    
+    fig.text(0.65, 0.98, num,
+             horizontalalignment='center',
+             verticalalignment='center',
+             bbox=dict(facecolor='lime', alpha=0.5))
+    
+    for tupl in ax_discard:
+        fig.delaxes(axes[tupl])
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=.0, wspace=.0)
+
+#%%
+# =============================================================================
+# VIRTUAL VS VIRTUAL EV
+# =============================================================================
+
+    # recovering data
+    energy = trig.energy_ev
+    cut_qual = trig.cut.quality
+    cut_fid = trig.cut.fiducial
+    
+    # initializing pseudo-corner plot
+    ax_tuples = [(0,0), (1,0), (1,1), (2,0), (2,1), (2,2)]
+    ax_discard = [(0, 1), (1, 2), (0, 2)]
+    
+    
+    chan_x = [run_tree.chan_label[ind] for ind in run_tree.chan_collect]
+    chan_x.insert(0, 'heat_a')
+    chan_y = [run_tree.chan_label[ind] for ind in run_tree.chan_collect]
+    chan_y.append('collect')
+    
+    num = 'VIRTUAL vs VIRTUAL EV'
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(8.27, 8.27),
+                             num=num, sharex='col', sharey='row')
+
+    # actually plotting the data
+    for atupl in ax_tuples:
+        
+        ax = axes[atupl]
+        xlab = chan_x[atupl[1]]
+        ylab = chan_y[atupl[0]]
+
+        energy_x = getattr(energy, xlab)
+        energy_y = getattr(energy, ylab)
+
+        ax.plot(
+                energy_x[cut_fid], energy_y[cut_fid],
+                ls='none', marker='2', zorder=11, color='limegreen',
+                label='Fiducial Events'
+        )
+
+        ax.plot(
+                energy_x[cut_qual], energy_y[cut_qual],
+                ls='none', marker='1', zorder=10, color='slateblue',
+                label='Quality Events'
+        )
+            
+        ax.plot(
+                energy_x, energy_y,
+                ls='none', marker=',', zorder=9, color='coral',
+                label='All events'
+        )
+            
+        custom_autoscale(ax, energy_x[cut_qual], energy_y[cut_qual])
+        
+        ax.grid(alpha=0.3)
+        
+        if atupl == (0,0):
+            ax.legend(loc='lower left', framealpha=1,
+                      bbox_to_anchor=(1.05, 0.05), borderaxespad=0.,
+            )
+        
+        if atupl[0] == 2:
+            ax.set_xlabel(
+                    'Energy {} [eV]'.format(
+                            xlab.replace('_', ' ')
+                    )
+            )
+                
+        if atupl[1] == 0:
+            ax.set_ylabel(
+                    'Energy {} [eV]'.format(
+                            ylab.replace('_', ' ')
                     )
             )
     
