@@ -125,7 +125,6 @@ class Guardian(Wisp):
         
         # appending the attributes of all root files to the empty list
         for root in self.roots:
-            # for self.run_tree
             for key in self.run_tree._keys:
                 root_attr = getattr(root.run_tree, key)
                 attr_list = getattr(self.run_tree, key)
@@ -194,7 +193,6 @@ class Analysis(object):
         for fname, label in zip(self.files, self._part_label):
             fpath = '/'.join((self.dir, fname))
             part_root = Root(fpath)
-#            setattr(self, label, part_root)
             (self.roots).append(part_root)
 
         self.all = Guardian(self.roots)
