@@ -177,7 +177,6 @@ class Analysis_red80(Analysis):
         """
         run_tree = self.all.run_tree
         trig = self.all.trig
-        noise = self.all.noise
         
         self.calibration_peak = Artifact('calibration_peak')
         self.calibration_peak.energy = 10.37 * 1e3 # Ge 10.37keV
@@ -204,23 +203,9 @@ class Analysis_red80(Analysis):
             lab = run_tree.chan_label[ind]
             data = energy[:, ind]
         
-        # XXX define the _fitstart method in model_spectrum.py
-        #        # initialization for the double-gaussian model
-        #        mu01, mu02 = np.quantile(data, [0.10, 0.90])
-        #        sig01 = sig02 = noise.sigma0.heat_a
-        #        p0_light = [0.5, mu01, sig01, mu02, sig02]
-        #        p0 = np.append(p0_light, [0, 1])
-            
-            # intialization for the fiducial mixture model
-            mu01, mu02 = np.quantile(data, [0.10, 0.90])
-            mu03 = np.mean(data)
-            sig01 = sig02 = noise.sigma0.heat_a
-            sig03 = abs(mu01 - mu02)
-            p0_light = [0.50, mu01, sig01, mu02, sig02, 0.05, mu03, sig03]
-            p0 = np.append(p0_light, [0, 1])
-            
-            popt = self.model.dist.fit(data, *p0_light, floc=0, fscale=1)
-        
+            p0 = self.model.dist._fitstart(data)
+            popt = self.model.dist.fit(data, floc=0, fscale=1)
+                
             setattr(self.model.popt, lab, popt)
             # saving also the initialization for debug purpose
             setattr(self.model.pinit, lab, p0)
@@ -334,7 +319,7 @@ class Analysis_red80(Analysis):
         Analysis.__init__(
                 self,
                 run,
-                detector='RED80',
+                detector='RED70',
                 run_dir='/home/misiak/Data/data_run57'
         )
 

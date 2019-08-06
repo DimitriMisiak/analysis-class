@@ -302,25 +302,25 @@ for etype in etypes:
             ax_hist(ax, bin_edges, xdata_fid,
                     'Fiducial events', color='limegreen')                
             
-#            if ind in run_tree.chan_signal:
-#                popt = getattr(ana.model.popt, label)
-#                xrange = np.linspace(xdata_fid.min(), xdata_fid.max(), 1000)
-#                pdf = ana.model.dist.pdf(xrange, *popt)
-#                cdf = ana.model.dist.cdf(xrange, *popt)
-#                normalization = getattr(trig,
-#                                        'nsamples_{}'.format(
-#                                                ana.calibration_peak.cut_type
-#                                        ))
-#                pdf_norm = pdf * normalization * (bin_edges[1] - bin_edges[0])
-#                
-#                ax.autoscale(False)
-#                ax.plot(xrange, pdf_norm,
-#                        ls='--', color='yellow',
-#                        label='fit')
-#                
-#                ax.twinx().plot(xrange, cdf,
-#                        ls='-.', color='yellow',
-#                        label='fit')
+            if ind in run_tree.chan_signal:
+                popt = getattr(ana.model.popt, label)
+                xrange = np.linspace(xdata_fid.min(), xdata_fid.max(), 1000)
+                pdf = ana.model.dist.pdf(xrange, *popt)
+                cdf = ana.model.dist.cdf(xrange, *popt)
+                normalization = getattr(trig,
+                                        'nsamples_{}'.format(
+                                                ana.calibration_peak.cut_type
+                                        ))
+                pdf_norm = pdf * normalization * (bin_edges[1] - bin_edges[0])
+                
+                ax.autoscale(False)
+                ax.plot(xrange, pdf_norm,
+                        ls='--', color='yellow',
+                        label='fit')
+                
+                ax.twinx().plot(xrange, cdf,
+                        ls='-.', color='yellow',
+                        label='fit')
         
         ax.legend(loc=2)
         ax.set_title(label.replace('_', ' '))
@@ -336,57 +336,57 @@ for etype in etypes:
     fig.delaxes(axes[0,0])    
     fig.tight_layout()
 
-##%%
-## =============================================================================
-## HISTOGRAM EV
-## =============================================================================
-#for etype in etypes:
-#
-#    energy = etype.energy_ev
-#    
-#    ax_tuples = ((0, 0), (0, 1), (1, 0), (1, 1))
-#    labels = run_tree.chan_label_virtual
-#
-#    num = '{} : Quality Cut Histogram EV'.format(etype.name)
-#
-#    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(11.69, 8.27),
-#                             num=num)
-#    
-#    for tupl, label in zip(ax_tuples, labels):
-#        xdata = getattr(energy, label)
-#        ax = axes[tupl]
-#        xdata_qual = xdata[etype.cut.quality]
-#        
-#        if etype is noise:
-#            bin_edges = np.histogram_bin_edges(xdata[etype.cut.quality])
-#        
-#        if etype is trig:
-#            bin_edges = custom_bin_edges(xdata_qual, 
-#                                         getattr(noise.sigma0_ev, label))
-#    
-#        ax_hist(ax, bin_edges, xdata,
-#                'All events', color='coral')
-#        ax_hist(ax, bin_edges, xdata_qual,
-#                'Quality events', color='slateblue')
-#        
-#        if etype is trig:
-#            xdata_fid = xdata[trig.cut.fiducial]
-#            ax_hist(ax, bin_edges, xdata_fid,
-#                    'Fiducial events', color='limegreen')     
-#            
-#        ax.set_xlabel('Enregy [eV]')
-#        ax.legend(loc=2)
-#        ax.set_title(label.replace('_', ' '))
-#        
-#        if etype is noise:
-#            ax.set_yscale('linear')
-#    
-#    fig.text(0.5, 0.98, num,
-#             horizontalalignment='center',
-#             verticalalignment='center',
-#             bbox=dict(facecolor='lime', alpha=0.5))
-#  
-#    fig.tight_layout()
+#%%
+# =============================================================================
+# HISTOGRAM EV
+# =============================================================================
+for etype in etypes:
+
+    energy = etype.energy_ev
+    
+    ax_tuples = ((0, 0), (0, 1), (1, 0), (1, 1))
+    labels = run_tree.chan_label_virtual
+
+    num = '{} : Quality Cut Histogram EV'.format(etype.name)
+
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(11.69, 8.27),
+                             num=num)
+    
+    for tupl, label in zip(ax_tuples, labels):
+        xdata = getattr(energy, label)
+        ax = axes[tupl]
+        xdata_qual = xdata[etype.cut.quality]
+        
+        if etype is noise:
+            bin_edges = np.histogram_bin_edges(xdata[etype.cut.quality])
+        
+        if etype is trig:
+            bin_edges = custom_bin_edges(xdata_qual, 
+                                         getattr(noise.sigma0_ev, label))
+    
+        ax_hist(ax, bin_edges, xdata,
+                'All events', color='coral')
+        ax_hist(ax, bin_edges, xdata_qual,
+                'Quality events', color='slateblue')
+        
+        if etype is trig:
+            xdata_fid = xdata[trig.cut.fiducial]
+            ax_hist(ax, bin_edges, xdata_fid,
+                    'Fiducial events', color='limegreen')     
+            
+        ax.set_xlabel('Enregy [eV]')
+        ax.legend(loc=2)
+        ax.set_title(label.replace('_', ' '))
+        
+        if etype is noise:
+            ax.set_yscale('linear')
+    
+    fig.text(0.5, 0.98, num,
+             horizontalalignment='center',
+             verticalalignment='center',
+             bbox=dict(facecolor='lime', alpha=0.5))
+  
+    fig.tight_layout()
 
 #%%
 # =============================================================================
@@ -483,87 +483,87 @@ for tupl in ax_discard:
 fig.tight_layout()
 fig.subplots_adjust(hspace=.0, wspace=.0)
 
-##%%
-## =============================================================================
-## VIRTUAL VS VIRTUAL EV
-## =============================================================================
-#
-## recovering data
-#energy = trig.energy_ev
-#cut_qual = trig.cut.quality
-#cut_fid = trig.cut.fiducial
-#
-## initializing pseudo-corner plot
-#ax_tuples = [(0,0), (1,0), (1,1), (2,0), (2,1), (2,2)]
-#ax_discard = [(0, 1), (1, 2), (0, 2)]
-#
-#
-#chan_x = [run_tree.chan_label[ind] for ind in run_tree.chan_collect]
-#chan_x.insert(0, 'heat_a')
-#chan_y = [run_tree.chan_label[ind] for ind in run_tree.chan_collect]
-#chan_y.append('collect')
-#
-#num = 'VIRTUAL vs VIRTUAL EV'
-#fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(8.27, 8.27),
-#                         num=num, sharex='col', sharey='row')
-#
-## actually plotting the data
-#for atupl in ax_tuples:
-#    
-#    ax = axes[atupl]
-#    xlab = chan_x[atupl[1]]
-#    ylab = chan_y[atupl[0]]
-#
-#    energy_x = getattr(energy, xlab)
-#    energy_y = getattr(energy, ylab)
-#
-#    ax.plot(
-#            energy_x[cut_fid], energy_y[cut_fid],
-#            ls='none', marker='2', zorder=11, color='limegreen',
-#            label='Fiducial Events'
-#    )
-#
-#    ax.plot(
-#            energy_x[cut_qual], energy_y[cut_qual],
-#            ls='none', marker='1', zorder=10, color='slateblue',
-#            label='Quality Events'
-#    )
-#        
-#    ax.plot(
-#            energy_x, energy_y,
-#            ls='none', marker=',', zorder=9, color='coral',
-#            label='All events'
-#    )
-#        
-#    custom_autoscale(ax, energy_x[cut_qual], energy_y[cut_qual])
-#    
-#    ax.grid(alpha=0.3)
-#    
-#    if atupl == (0,0):
-#        ax.legend(loc='lower left', framealpha=1,
-#                  bbox_to_anchor=(1.05, 0.05), borderaxespad=0.,
-#        )
-#    
-#    if atupl[0] == 2:
-#        ax.set_xlabel(
-#                'Energy {} [eV]'.format(
-#                        xlab.replace('_', ' ')
-#                )
-#        )
-#            
-#    if atupl[1] == 0:
-#        ax.set_ylabel(
-#                'Energy {} [eV]'.format(
-#                        ylab.replace('_', ' ')
-#                )
-#        )
-#
-#fig.text(0.65, 0.98, num,
-#         horizontalalignment='center',
-#         verticalalignment='center',
-#         bbox=dict(facecolor='lime', alpha=0.5))
-#
-#for tupl in ax_discard:
-#    fig.delaxes(axes[tupl])
-#fig.tight_layout()
-#fig.subplots_adjust(hspace=.0, wspace=.0)
+#%%
+# =============================================================================
+# VIRTUAL VS VIRTUAL EV
+# =============================================================================
+
+# recovering data
+energy = trig.energy_ev
+cut_qual = trig.cut.quality
+cut_fid = trig.cut.fiducial
+
+# initializing pseudo-corner plot
+ax_tuples = [(0,0), (1,0), (1,1), (2,0), (2,1), (2,2)]
+ax_discard = [(0, 1), (1, 2), (0, 2)]
+
+
+chan_x = [run_tree.chan_label[ind] for ind in run_tree.chan_collect]
+chan_x.insert(0, 'heat_a')
+chan_y = [run_tree.chan_label[ind] for ind in run_tree.chan_collect]
+chan_y.append('collect')
+
+num = 'VIRTUAL vs VIRTUAL EV'
+fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(8.27, 8.27),
+                         num=num, sharex='col', sharey='row')
+
+# actually plotting the data
+for atupl in ax_tuples:
+    
+    ax = axes[atupl]
+    xlab = chan_x[atupl[1]]
+    ylab = chan_y[atupl[0]]
+
+    energy_x = getattr(energy, xlab)
+    energy_y = getattr(energy, ylab)
+
+    ax.plot(
+            energy_x[cut_fid], energy_y[cut_fid],
+            ls='none', marker='2', zorder=11, color='limegreen',
+            label='Fiducial Events'
+    )
+
+    ax.plot(
+            energy_x[cut_qual], energy_y[cut_qual],
+            ls='none', marker='1', zorder=10, color='slateblue',
+            label='Quality Events'
+    )
+        
+    ax.plot(
+            energy_x, energy_y,
+            ls='none', marker=',', zorder=9, color='coral',
+            label='All events'
+    )
+        
+    custom_autoscale(ax, energy_x[cut_qual], energy_y[cut_qual])
+    
+    ax.grid(alpha=0.3)
+    
+    if atupl == (0,0):
+        ax.legend(loc='lower left', framealpha=1,
+                  bbox_to_anchor=(1.05, 0.05), borderaxespad=0.,
+        )
+    
+    if atupl[0] == 2:
+        ax.set_xlabel(
+                'Energy {} [eV]'.format(
+                        xlab.replace('_', ' ')
+                )
+        )
+            
+    if atupl[1] == 0:
+        ax.set_ylabel(
+                'Energy {} [eV]'.format(
+                        ylab.replace('_', ' ')
+                )
+        )
+
+fig.text(0.65, 0.98, num,
+         horizontalalignment='center',
+         verticalalignment='center',
+         bbox=dict(facecolor='lime', alpha=0.5))
+
+for tupl in ax_discard:
+    fig.delaxes(axes[tupl])
+fig.tight_layout()
+fig.subplots_adjust(hspace=.0, wspace=.0)

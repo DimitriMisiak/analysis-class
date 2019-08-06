@@ -7,6 +7,7 @@ Created on Mon Aug  5 22:11:20 2019
 """
 
 import scipy.stats as st
+import numpy as np
 
 class double_norm(st.rv_continuous):
     """ Double Gaussian distribution. """
@@ -32,6 +33,13 @@ class double_norm(st.rv_continuous):
 #        for arg in args:
 #            cond = np.logical_and(cond, (np.asarray(arg) > 0))
         return cond
+
+    def _fitstart(self, data):
+        mu01, mu02 = np.quantile(data, [0.10, 0.90])
+        sig01 = sig02 = abs(mu01 - mu02)/50
+        p0_light = [0.5, mu01, sig01, mu02, sig02]
+        p0 = np.append(p0_light, [0, 1])
+        return tuple(p0)
 
 class fid_mixture(st.rv_continuous):
     """ Double Gaussian distribution plus uniform distribution """
@@ -59,3 +67,13 @@ class fid_mixture(st.rv_continuous):
 #        for arg in args:
 #            cond = np.logical_and(cond, (np.asarray(arg) > 0))
         return cond
+    
+    def _fitstart(self, data):
+        mu01, mu02 = np.quantile(data, [0.10, 0.90])
+        mu03 = np.mean(data)
+        sig01 = sig02 = abs(mu01 - mu02)/50
+        sig03 = abs(mu01 - mu02)
+        p0_light = [0.50, mu01, sig01, mu02, sig02, 0.05, mu03, sig03]
+        p0 = np.append(p0_light, [0, 1])
+        return tuple(p0)
+            
