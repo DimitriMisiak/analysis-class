@@ -5,117 +5,84 @@
 @author: misiak
 
 """
-
 import numpy as np
 import matplotlib.pyplot as plt
 
-def load_vi_file(fpath):
+def load_mmr3_file(fpath_list):
 
-    raw_data = (
-        np.loadtxt(fpath, skiprows=1, unpack=True)
+    header_data = (
+            np.loadtxt(fpath_list[0], skiprows=0, unpack=True,
+                       delimiter=';', dtype=str, max_rows=1)        
     )
+    
+    data_dict = dict()
+    for title in header_data:
+        data_dict[title]=[]
+    
+    for fpath in fpath_list:
+        raw_data = (
+            np.loadtxt(fpath, skiprows=1, unpack=True, delimiter=';', dtype=str)
+        )
+    
+        for title, raw_array in zip(header_data, raw_data):
+            try:
+                data_dict[title]= np.concatenate(
+                        (data_dict[title], raw_array.astype(float))
+                )
+            except:
+                data_dict[title]= np.concatenate(
+                        (data_dict[title], raw_array)
+                )
+    
+    return data_dict
 
-    temp_array, curr_array, volt_array, resi_array = raw_data
+
+class Data_mmr3(object):
     
-    temp_list = np.unique(temp_array)
-    
-    vi_arrays = list()
-    for temp in temp_list:
+    def __init__(self, data_path_list, version='old'):
         
-        iv_array = raw_data[1:3, temp_array == temp]
-        (vi_arrays).append(iv_array)
+        self.data_paths = data_path_list
 
-    return temp_list, vi_arrays
+        self.data_dict = load_mmr3_file(self.data_paths)
 
-def plot_vi(temp_list, vi_arrays, std_arrays,
-            num='plot vi default num', color=None, mode='errorbar', **kwargs):
-    
-    ncurves = len(temp_list)
-    
-    if isinstance(color, (tuple, list, np.ndarray)):
-        assert len(color) == ncurves
+        self.time = self.data_dict['Time']
         
-    elif (color is None) or isinstance(color, str):
-        color = (color,) * ncurves
-        
-    else:
-        raise Exception('Invalid type for "color" keyword.')
-    
-    fig = plt.figure(num=num, figsize=(8,5))
-
-    for i in range(ncurves):
-        temp = temp_list[i]
-        i_array, v_array = vi_arrays[i]
-        if std_arrays is None:
-            std_array = None
-        elif isinstance(std_arrays, float):
-            std_array = v_array * std_arrays
+        if version == 'old':
+            self.temperature = self.data_dict['MMR3-156_1_Conv']
+        elif version == 'new':
+            self.temperature = self.data_dict['RuO2 MC_Conv']
         else:
-            _, std_array = std_arrays[i]
-        c = color[i]
+            raise Exception(
+                    'The value of the keyword "version" is not recognized. '
+                    'Choose between "old" and "new".')
         
-        if mode == 'errorbar':
-            plt.errorbar(i_array, v_array, yerr=std_array,
-                         color=c,
-                         label='{0:.1f} mK'.format(temp*1e3),
-                         **kwargs)
+        self.nsamples = self.temperature.shape[0]
+
+    def expo_plot(self, num='Data mmr3 expo plot'):
+        fig = plt.figure(num)
+        ax = fig.subplots()
+        ax.set_title(num) 
+        ax.plot(
+                self.time,
+                self.temperature,
+                color='slateblue',
+                marker='+',
+                label='RuO2 Mixing Chamber'
+        )
+        ax.set_xlabel('Time Unix [s?]')
+        ax.set_ylabel('Temperature MC [K]')
+        ax.grid(True)
+        ax.legend()
+        fig.tight_layout()
         
-        elif mode == 'plot': 
-            plt.plot(i_array, v_array, label='{0:.1f} mK'.format(temp*1e3),
-                     color = c,
-                     **kwargs)        
-
-    return fig
-
-class Data_vi(object):
-    
-    data_type = 'VI characteristic'
-    
-    def __init__(self, data_path, label, error=0.1):
-        
-        self.data_path = data_path
-        self.label = ' '.join((self.data_type, label))
-
-        self.temp_list, self.vi_arrays = load_vi_file(self.data_path)
-
-        if isinstance(error, str):
-            temp_list, std_arrays = load_vi_file(error)
-            assert temp_list == self.temp_list
-            self.std_arrays = std_arrays
-       
-        else:
-            error_coef = float(error)
-            self.std_arrays = list()
-            for i_array, v_array in self.vi_arrays:
-                std_array = np.vstack((i_array, error_coef*v_array))
-                self.std_arrays.append(std_array)
-               
-
-    def plot(self, num=None, **kwargs):
-        
-        if num is None:
-            num = self.label
-        
-        return plot_vi(self.temp_list, self.vi_arrays, self.std_arrays,
-                       num=num, **kwargs)
+        return fig
         
 if __name__ == '__main__':
     
     plt.close('all')
     plt.rcParams['text.usetex']=True
     
-    data_path = 'test/vi_run57_red70_late.csv'
+    data_paths = ('test/MACRT_2019-07-15.csv', 'test/MACRT_2019-07-16.csv')
+    data_mmr3 = Data_mmr3(data_paths, version='old')
     
-    data_iv = Data_vi(data_path, 'RED70 Late')
-    
-    fig = data_iv.plot(marker='.', lw=0.5)
-
-    plt.grid()
-    plt.xlabel('Voltage [V]')
-    plt.ylabel('Current [A]')
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    plt.title(fig.get_label())
-    plt.tight_layout(rect=(0., 0., 1., 1.))
-    
+    data_mmr3.expo_plot()
