@@ -12,8 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import ethem as eth
-
-from data_classes import Data_vi, plot_vi
+from data_classes import Data_vi, plot_vi, chi2_list, noising_data
 
 class Model_vi(object):
     
@@ -54,8 +53,10 @@ class Model_vi(object):
         assert len(self.conditionnal_parameters) == 2
         
         self.steady_state_fun = eth.solve_sse_param(
-                model.system, model.all_parameters, model.eval_dict
+                self.system, self.all_parameters, self.eval_dict
         )
+    
+        self.parameters_0 = [self.eval_dict[p] for p in self.parameters]
     
     
     def function(self, param):
@@ -81,31 +82,38 @@ class Model_vi(object):
             model_iv_array = np.vstack((i_array, model_iv))
             model_iv_list.append(model_iv_array)
     
-        return model_iv_list
-    
-    
+        return model_iv_list   
+        
+
     def fake_data(self, param, sigma_coeff=0.1):
         """ Add a gaussian noise depending on the model_data.
         """
         
         model_data = self.function(param)
         
-        fake_data = list()
-        for md in model_data:
-    
-            x_data, y_data = md
-    
-            sigma = y_data * sigma_coeff
-    
-            blob = np.random.normal(0,sigma,sigma.shape)
-    
-            noisy_data = y_data + blob
-    
-            fake_data.append(np.vstack((x_data, noisy_data)))
+        fake_data = noising_data(model_data, sigma_coeff)
     
         return fake_data
-  
+
+
+    def comparator(self, param,
+                   data_arrays=None, data_errors=None, 
+                   check_print=False):
+        
+        if data_arrays is None:
+            data_arrays = self.data.vi_arrays
+        if data_errors is None:
+            data_errors = self.data.std_arrays
+        model_arrays = self.function(param)
+        
+        x2 = chi2_list(data_arrays, model_arrays, data_errors)
+
+        if check_print is True:
+            print(x2)
+
+        return x2
     
+
 if __name__ == '__main__':
     
     plt.close('all')
@@ -131,31 +139,40 @@ if __name__ == '__main__':
     model.conditionnal_parameters = (cryo.temperature, capa.current,)
 
 #    # "secondary" parameters
-#    model.parameters = (
-#            elntd.R0,
-#            elntd.T0,
-#            leak.cond_alpha,
-#            epcoup.cond_alpha,
-#    )
+    model.parameters = ()
+    
+    model.parameters = (
+            elntd.R0,
+            elntd.T0,
+            leak.cond_alpha,
+            epcoup.cond_alpha,
+    )
 
     model.lock_model()
     
-    modvi_arrays = model.function([])
+    modvi_arrays = model.function(model.parameters_0)
     
     fig = plot_vi(model.temp_list, modvi_arrays, None, num=model.data.label)
     
-    fake_arrays = model.fake_data([], 0.1)
+    fake_arrays = model.fake_data(model.parameters_0, 0.1)
     
-    plot_vi(model.temp_list, fake_arrays, 0.2, num=model.data.label,
+    plot_vi(model.temp_list, fake_arrays, 0.1, num=model.data.label,
             ls='none', marker='.')
     
-#    model.data.plot(num=model.data.label, ls='none', marker='.')
+    chi2 = chi2_list(modvi_arrays, fake_arrays, 0.1)
     
     plt.grid()
     plt.xlabel('Voltage [V]')
     plt.ylabel('Current [A]')
     plt.xscale('log')
     plt.yscale('log')
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1), ncol=2)
+    plt.legend(title='$\chi^2=${:.3e} ; dof={}'.format(chi2, model.data.nsamples),
+               loc='upper left', bbox_to_anchor=(1, 1), ncol=2)
     plt.title(fig.get_label())
     plt.tight_layout(rect=(0., 0., 1., 1.))    
+    
+    
+#    model.data.plot(num=model.data.label, ls='none', marker='.')    
+    chi2_data = model.comparator(model.parameters_0)
+    chi2_data_bis = chi2_list(modvi_arrays, model.data.vi_arrays, model.data.std_arrays)
+    assert chi2_data == chi2_data_bis    
