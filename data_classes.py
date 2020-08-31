@@ -5,69 +5,40 @@
 @author: misiak
 
 """
-
 import numpy as np
 import matplotlib.pyplot as plt
 import mcmc_red as mcr
 
-def load_vi_file(fpath):
+def load_mmr3_file(fpath_list):
 
-    raw_data = (
-        np.loadtxt(fpath, skiprows=1, unpack=True)
+    header_data = (
+            np.loadtxt(fpath_list[0], skiprows=0, unpack=True,
+                       delimiter=';', dtype=str, max_rows=1)        
     )
-
-    temp_array, curr_array, volt_array, resi_array = raw_data
     
-    temp_list = np.unique(temp_array)
+    data_dict = dict()
+    for title in header_data:
+        data_dict[title]=[]
     
-    vi_arrays = list()
-    for temp in temp_list:
-        
-        iv_array = raw_data[1:3, temp_array == temp]
-        (vi_arrays).append(iv_array)
-
-    return temp_list, vi_arrays
-
-def plot_vi(temp_list, vi_arrays, std_arrays,
-            num='plot vi default num', color=None, mode='errorbar', **kwargs):
+    for fpath in fpath_list:
+        raw_data = (
+            np.loadtxt(fpath, skiprows=1, unpack=True, delimiter=';', dtype=str)
+        )
     
-    ncurves = len(temp_list)
+        for title, raw_array in zip(header_data, raw_data):
+            try:
+                data_dict[title]= np.concatenate(
+                        (data_dict[title], raw_array.astype(float))
+                )
+            except:
+                data_dict[title]= np.concatenate(
+                        (data_dict[title], raw_array)
+                )
     
-    if isinstance(color, (tuple, list, np.ndarray)):
-        assert len(color) == ncurves
-        
-    elif (color is None) or isinstance(color, str):
-        color = (color,) * ncurves
-        
-    else:
-        raise Exception('Invalid type for "color" keyword.')
-    
-    fig = plt.figure(num=num, figsize=(8,5))
+    return data_dict
 
-    for i in range(ncurves):
-        temp = temp_list[i]
-        i_array, v_array = vi_arrays[i]
-        if std_arrays is None:
-            std_array = None
-        elif isinstance(std_arrays, float):
-            std_array = v_array * std_arrays
-        else:
-            _, std_array = std_arrays[i]
-        c = color[i]
-        
-        if mode == 'errorbar':
-            plt.errorbar(i_array, v_array, yerr=std_array,
-                         color=c,
-                         label='{0:.1f} mK'.format(temp*1e3),
-                         **kwargs)
-        
-        elif mode == 'plot': 
-            plt.plot(i_array, v_array, label='{0:.1f} mK'.format(temp*1e3),
-                     color = c,
-                     **kwargs)        
 
-    return fig
-
+<<<<<<< HEAD
 
 def chi2_list(data_1, data_2, sigma):
     """ Return the summed chi2 between two given set of data.
@@ -118,22 +89,24 @@ def noising_data(data_arrays, sigma_coeff=0.1):
     return noisy_data
 
 class Data_vi(object):
+=======
+class Data_mmr3(object):
+>>>>>>> f7bb10be8143c9b22931c3c9885b7aac22bae186
     
-    data_type = 'VI characteristic'
-    
-    def __init__(self, data_path, label, error=0.1):
+    def __init__(self, data_path_list, version='old'):
         
-        self.data_path = data_path
-        self.label = ' '.join((self.data_type, label))
+        self.data_paths = data_path_list
 
-        self.temp_list, self.vi_arrays = load_vi_file(self.data_path)
+        self.data_dict = load_mmr3_file(self.data_paths)
 
-        if isinstance(error, str):
-            temp_list, std_arrays = load_vi_file(error)
-            assert temp_list == self.temp_list
-            self.std_arrays = std_arrays
-       
+        self.time = self.data_dict['Time']
+        
+        if version == 'old':
+            self.temperature = self.data_dict['MMR3-156_1_Conv']
+        elif version == 'new':
+            self.temperature = self.data_dict['RuO2 MC_Conv']
         else:
+<<<<<<< HEAD
             error_coef = float(error)
             self.std_arrays = list()
             for i_array, v_array in self.vi_arrays:
@@ -146,18 +119,39 @@ class Data_vi(object):
         self.nsamples = nsamples
 
     def plot(self, num=None, **kwargs):
+=======
+            raise Exception(
+                    'The value of the keyword "version" is not recognized. '
+                    'Choose between "old" and "new".')
+>>>>>>> f7bb10be8143c9b22931c3c9885b7aac22bae186
         
-        if num is None:
-            num = self.label
+        self.nsamples = self.temperature.shape[0]
+
+    def expo_plot(self, num='Data mmr3 expo plot'):
+        fig = plt.figure(num)
+        ax = fig.subplots()
+        ax.set_title(num) 
+        ax.plot(
+                self.time,
+                self.temperature,
+                color='slateblue',
+                marker='+',
+                label='RuO2 Mixing Chamber'
+        )
+        ax.set_xlabel('Time Unix [s?]')
+        ax.set_ylabel('Temperature MC [K]')
+        ax.grid(True)
+        ax.legend()
+        fig.tight_layout()
         
-        return plot_vi(self.temp_list, self.vi_arrays, self.std_arrays,
-                       num=num, **kwargs)
+        return fig
         
 if __name__ == '__main__':
     
     plt.close('all')
     plt.rcParams['text.usetex']=True
     
+<<<<<<< HEAD
     data_path = 'test/vi_run57_red80_late.csv'
     
     data_vi = Data_vi(data_path, 'RED80 Late')
@@ -173,3 +167,9 @@ if __name__ == '__main__':
     plt.title(fig.get_label())
     plt.tight_layout(rect=(0., 0., 1., 1.))
     
+=======
+    data_paths = ('test/MACRT_2019-07-15.csv', 'test/MACRT_2019-07-16.csv')
+    data_mmr3 = Data_mmr3(data_paths, version='old')
+    
+    data_mmr3.expo_plot()
+>>>>>>> f7bb10be8143c9b22931c3c9885b7aac22bae186
